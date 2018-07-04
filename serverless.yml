@@ -1,0 +1,73 @@
+service: sainsburys-district-code
+
+provider:
+  name: aws
+  runtime: python3.6
+  role: DistrictCodeRole
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: non-linux
+
+functions:
+  DistrictCode:
+    name: ${opt:stage, self:provider.stage}-DistrictCode
+    description: Gets district codes from API endpoint
+    handler: district_code.lambda_handler
+    timeout: 300
+    events:
+      - schedule: cron(0 12 * * ? *)
+    tags:
+      environment: ${opt:stage, self:provider.stage}
+      team: Saisnbirys
+    environment:
+      S3_BUCKET: tech-test-bucket-sainsburys
+resources:
+  Resources:
+    LambdaAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        ActionsEnabled: True
+        AlarmDescription: Notify if lambda function errors
+        AlarmName: ${opt:stage, self:provider.stage}-DistrictCode
+        ComparisonOperator: GreaterThanOrEqualToThreshold
+        Dimensions:
+          - Name: FunctionName
+            Value: ${opt:stage, self:provider.stage}-DistrictCode
+        EvaluationPeriods: 1
+        MetricName: Errors
+        Namespace: AWS/Lambda
+        Period: 60
+        Statistic: Sum
+        Threshold: 1
+    DistrictCodeRole:
+      Type: AWS::IAM::Role
+      Properties:
+        Path: /
+        RoleName: ${opt:stage, self:provider.stage}-District-Code-Role
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: ${opt:stage, self:provider.stage}-District-Code-Policy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource: arn:aws:logs::log-group:/aws/lambda/*:*
+                - Effect: Allow
+                  Action:
+                    - s3:PutObject
+                  Resource: arn:aws:s3:::tech-test-bucket-sainsburys/*
